@@ -1,0 +1,476 @@
+---
+alwaysApply: false
+---
+
+# Go Wails + Vue + UnoCSS 项目开发规范
+
+## 一、项目创建教程
+
+### 1.1 环境准备
+
+#### 必需工具
+- **Go**: 1.21 或更高版本
+- **Node.js**: 18 或更高版本
+- **pnpm**: 包管理器（推荐使用）
+- **Wails CLI**: 通过 `go install github.com/wailsapp/wails/v2/cmd/wails@latest` 安装
+
+#### 验证安装
+```powershell
+go version
+node --version
+pnpm --version
+wails version
+```
+
+### 1.2 创建新项目
+
+#### 使用 Wails CLI 创建项目
+```powershell
+# 创建新项目
+wails init -n 项目名称 -t vanilla-ts
+
+# 或者使用交互式创建
+wails init
+```
+
+#### 项目初始化后的目录结构
+```
+项目名称/
+├── app.go              # Go 应用入口
+├── main.go             # 主程序入口
+├── go.mod              # Go 模块文件
+├── wails.json          # Wails 项目配置
+├── frontend/           # 前端代码目录
+│   ├── package.json
+│   ├── vite.config.js
+│   └── src/
+└── build/              # 构建输出目录
+```
+
+### 1.3 配置前端为 Vue + UnoCSS
+
+#### 步骤 1: 进入前端目录并安装依赖
+```powershell
+cd frontend
+pnpm install vue@latest @vitejs/plugin-vue
+pnpm install -D unocss @unocss/vite
+```
+
+#### 步骤 2: 配置 Vite (vite.config.js)
+```javascript
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import UnoCSS from '@unocss/vite'
+
+export default defineConfig({
+  plugins: [
+    vue(),
+    UnoCSS()
+  ],
+  server: {
+    fs: {
+      strict: false
+    }
+  }
+})
+```
+
+#### 步骤 3: 创建 UnoCSS 配置文件 (uno.config.js)
+```javascript
+import { defineConfig } from 'unocss'
+import presetUno from '@unocss/preset-uno'
+
+export default defineConfig({
+  presets: [
+    presetUno()
+  ]
+})
+```
+
+#### 步骤 4: 安装 UnoCSS 预设
+```powershell
+pnpm install -D @unocss/preset-uno
+```
+
+#### 步骤 5: 修改入口文件 (src/main.js)
+```javascript
+import { createApp } from 'vue'
+import App from './App.vue'
+import 'virtual:uno.css'
+import './style.css'
+
+createApp(App).mount('#app')
+```
+
+#### 步骤 6: 创建 Vue 主组件 (src/App.vue)
+```vue
+<template>
+  <div class="p-4">
+    <h1 class="text-2xl font-bold">Wails + Vue + UnoCSS</h1>
+  </div>
+</template>
+
+<script setup>
+// 组件逻辑
+</script>
+```
+
+### 1.4 配置 Wails 项目
+
+#### 编辑 wails.json
+```json
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "项目名称",
+  "outputfilename": "项目名称",
+  "frontend": {
+    "dir": "./frontend",
+    "install": "pnpm install",
+    "build": "pnpm run build",
+    "dev": "pnpm run dev",
+    "bridge": "src/bridge.js",
+    "serve": "src/main.js"
+  }
+}
+```
+
+## 二、开发规范
+
+### 2.1 项目结构规范
+
+```
+项目根目录/
+├── main.go                 # 应用入口
+├── app.go                  # 应用配置和绑定
+├── go.mod                  # Go 依赖管理
+├── wails.json              # Wails 配置
+├── frontend/               # 前端代码
+│   ├── src/
+│   │   ├── main.js         # Vue 入口文件
+│   │   ├── App.vue         # 根组件
+│   │   ├── components/     # Vue 组件
+│   │   ├── assets/         # 静态资源
+│   │   └── style.css       # 全局样式
+│   ├── uno.config.js       # UnoCSS 配置
+│   ├── vite.config.js      # Vite 配置
+│   └── package.json        # 前端依赖
+├── internal/               # 内部包（可选）
+│   └── app/                # 应用逻辑
+├── build/                  # 构建输出
+└── md/                     # 文档目录
+```
+
+### 2.2 Go 代码规范
+
+#### 2.2.1 文件组织
+- 主入口：`main.go`
+- 应用配置：`app.go` 或 `internal/app/app.go`
+- 业务逻辑：按功能模块组织在 `internal/` 目录下
+
+#### 2.2.2 命名规范
+- 包名：小写，简短有意义
+- 导出函数：首字母大写，使用驼峰命名
+- 私有函数：首字母小写
+- 接口：以 `er` 结尾（如 `Reader`）或使用描述性名称
+
+#### 2.2.3 代码示例
+```go
+// app.go
+package main
+
+import (
+    "context"
+    "embed"
+    "github.com/wailsapp/wails/v2"
+    "github.com/wailsapp/wails/v2/pkg/options"
+)
+
+//go:embed all:frontend/dist
+var assets embed.FS
+
+func main() {
+    app := NewApp()
+    
+    err := wails.Run(&options.App{
+        Title:  "应用名称",
+        Width:  1024,
+        Height: 768,
+        Assets: assets,
+        OnStartup: app.startup,
+    })
+    
+    if err != nil {
+        println("Error:", err.Error())
+    }
+}
+
+// App 结构体
+type App struct {
+    ctx context.Context
+}
+
+func NewApp() *App {
+    return &App{}
+}
+
+func (a *App) startup(ctx context.Context) {
+    a.ctx = ctx
+}
+
+// 导出给前端的方法
+func (a *App) Greet(name string) string {
+    return "Hello, " + name
+}
+```
+
+### 2.3 Vue 代码规范
+
+#### 2.3.1 组件规范
+- 使用 `<script setup>` 语法
+- 组件文件名：PascalCase（如 `UserProfile.vue`）
+- 单文件组件结构：`<template>` → `<script setup>` → `<style>`
+
+#### 2.3.2 代码示例
+```vue
+<template>
+  <div class="container p-4">
+    <h1 class="text-2xl font-bold mb-4">{{ title }}</h1>
+    <button 
+      @click="handleClick" 
+      class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+    >
+      点击
+    </button>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { Greet } from '../wailsjs/go/main/App'
+
+const title = ref('Wails + Vue')
+
+const handleClick = async () => {
+  const result = await Greet('World')
+  console.log(result)
+}
+</script>
+
+<style scoped>
+/* 使用 UnoCSS，通常不需要额外样式 */
+</style>
+```
+
+#### 2.3.3 调用 Go 方法
+```javascript
+// 导入生成的 Go 绑定
+import { Greet } from '../wailsjs/go/main/App'
+
+// 异步调用
+const result = await Greet('参数')
+```
+
+### 2.4 UnoCSS 使用规范
+
+#### 2.4.1 优先使用原子类
+- ✅ 推荐：`class="p-4 bg-blue-500 text-white rounded"`
+- ❌ 避免：自定义 CSS（除非必要）
+
+#### 2.4.2 常用工具类
+- **间距**: `p-4`, `m-2`, `px-6`, `py-3`
+- **颜色**: `bg-blue-500`, `text-gray-700`, `border-red-300`
+- **尺寸**: `w-full`, `h-screen`, `max-w-md`
+- **布局**: `flex`, `grid`, `items-center`, `justify-between`
+- **响应式**: `md:p-6`, `lg:text-2xl`
+
+#### 2.4.3 自定义配置
+在 `uno.config.js` 中添加自定义规则：
+```javascript
+export default defineConfig({
+  presets: [presetUno()],
+  theme: {
+    colors: {
+      primary: '#your-color'
+    }
+  },
+  shortcuts: {
+    'btn': 'px-4 py-2 rounded bg-blue-500 text-white'
+  }
+})
+```
+
+### 2.5 开发工作流
+
+#### 2.5.1 开发模式
+```powershell
+# 在项目根目录运行
+wails dev
+```
+- 自动启动前端开发服务器
+- 支持热重载
+- 可在浏览器中调试（http://localhost:34115）
+
+#### 2.5.2 构建生产版本
+```powershell
+# 构建当前平台
+wails build
+
+# 构建指定平台（需要交叉编译工具链）
+wails build -platform windows/amd64
+wails build -platform darwin/arm64
+```
+
+#### 2.5.3 调试技巧
+- 使用 `console.log()` 在前端调试
+- 使用 `println()` 或 `log` 包在 Go 后端调试
+- 开发模式下可在浏览器控制台查看前端日志
+
+## 三、Cursor 开发规范
+
+### 3.1 文件管理规范
+
+#### 3.1.1 文件创建原则
+- **不轻易新建文件**：优先在现有文件中扩展功能
+- **不轻易删除代码**：保留历史代码，使用注释标记废弃
+- **文档文件**：统一放在 `md/` 目录
+- **测试代码**：统一放在 `test/` 目录
+
+#### 3.1.2 文件命名
+- Go 文件：`snake_case.go` 或 `camelCase.go`
+- Vue 组件：`PascalCase.vue`
+- 配置文件：`kebab-case.json` 或 `camelCase.js`
+
+### 3.2 代码提交规范
+
+#### 3.2.1 提交信息格式
+```
+类型: 简短描述
+
+详细说明（可选）
+```
+
+#### 3.2.2 提交类型
+- `feat`: 新功能
+- `fix`: 修复 bug
+- `docs`: 文档更新
+- `style`: 代码格式调整
+- `refactor`: 重构
+- `test`: 测试相关
+- `chore`: 构建/工具链相关
+
+### 3.3 代码质量要求
+
+#### 3.3.1 必须修复的问题
+- ✅ **所有 lint 错误必须修复**
+- ✅ **所有类型错误必须修复**
+- ✅ **编译错误必须修复**
+
+#### 3.3.2 代码检查
+```powershell
+# Go 代码检查
+go vet ./...
+
+# 前端代码检查（如果配置了 ESLint）
+cd frontend
+pnpm run lint
+```
+
+### 3.4 开发最佳实践
+
+#### 3.4.1 最小化原则
+- 用最少的代码实现需求
+- 优先使用现有工具和库
+- 避免过度设计
+
+#### 3.4.2 简单高效
+- 代码结构清晰直观
+- 函数职责单一
+- 命名具有描述性
+
+#### 3.4.3 渐进式开发
+- 先实现核心功能
+- 逐步完善细节
+- 及时测试验证
+
+### 3.5 依赖管理
+
+#### 3.5.1 Go 依赖
+```powershell
+# 添加依赖
+go get 包名
+
+# 更新依赖
+go get -u 包名
+
+# 整理依赖
+go mod tidy
+```
+
+#### 3.5.2 前端依赖
+```powershell
+# 添加依赖
+pnpm add 包名
+
+# 添加开发依赖
+pnpm add -D 包名
+
+# 更新依赖
+pnpm update
+```
+
+## 四、常见问题解决
+
+### 4.1 前端无法调用 Go 方法
+- 检查 `wails.json` 中的 `bridge` 配置
+- 确认已运行 `wails dev` 生成绑定文件
+- 检查导入路径是否正确
+
+### 4.2 UnoCSS 样式不生效
+- 确认 `uno.config.js` 配置正确
+- 检查 `main.js` 中是否导入 `'virtual:uno.css'`
+- 确认 Vite 插件配置正确
+
+### 4.3 构建失败
+- 检查 Go 版本是否符合要求
+- 确认所有依赖已正确安装
+- 查看构建日志中的具体错误信息
+
+### 4.4 热重载不工作
+- 确认 `wails dev` 正在运行
+- 检查文件保存是否触发
+- 尝试重启开发服务器
+
+## 五、参考资源
+
+- **Wails 官方文档**: https://wails.io/docs
+- **Vue 3 文档**: https://cn.vuejs.org/
+- **UnoCSS 文档**: https://unocss.dev/
+- **Vite 文档**: https://cn.vitejs.dev/
+
+## 六、快速命令参考
+
+```powershell
+# 创建项目
+wails init -n 项目名
+
+# 开发模式
+wails dev
+
+# 构建应用
+wails build
+
+# 安装前端依赖
+cd frontend && pnpm install
+
+# 安装 Go 依赖
+go mod download
+
+# 整理 Go 依赖
+go mod tidy
+```
+
+---
+
+**最后更新**: 2025-01-16
+**维护者**: 开发团队
+
