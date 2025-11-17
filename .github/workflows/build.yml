@@ -23,11 +23,15 @@ jobs:
         with:
           go-version: '1.23'
 
+      # 1. 保证 CLT 存在
+      - name: Ensure Xcode CLT
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --install || sudo xcode-select -s /Library/Developer/CommandLineTools
+
       - name: Install Wails CLI
         run: |
           go install github.com/wailsapp/wails/v2/cmd/wails@latest
-        env:
-          PATH: ${{ env.PATH }}:${{ env.HOME }}/go/bin
+          echo "$HOME/go/bin" >> $GITHUB_PATH
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -64,14 +68,10 @@ jobs:
       - name: Build application (Windows)
         if: matrix.os == 'windows-latest'
         run: wails build -platform windows/amd64
-        env:
-          PATH: ${{ env.PATH }}:${{ env.HOME }}/go/bin
 
       - name: Build application (macOS)
         if: matrix.os == 'macos-latest'
-        run: wails build -platform darwin/amd64
-        env:
-          PATH: ${{ env.PATH }}:${{ env.HOME }}/go/bin
+        run: wails build -platform darwin/amd64 -nsis=false -skipbindings -o FileRenaming
 
       - name: Restore wails.json (Windows)
         if: always() && matrix.os == 'windows-latest'
@@ -92,34 +92,12 @@ jobs:
           path: build/bin/FileRenaming.exe
           retention-days: 30
 
-      - name: Find macOS build output
-        if: matrix.os == 'macos-latest'
-        id: find-macos-output
-        run: |
-          echo "Build directory contents:"
-          ls -la build/bin/ 2>/dev/null || echo "build/bin not found"
-          echo ""
-          echo "Searching for FileRenaming files:"
-          find build -name "FileRenaming*" 2>/dev/null || echo "No FileRenaming files found"
-          echo ""
-          # Try to find the actual output
-          if [ -d "build/bin/FileRenaming.app" ]; then
-            echo "OUTPUT_PATH=build/bin/FileRenaming.app" >> $GITHUB_OUTPUT
-            echo "Found .app bundle"
-          elif [ -f "build/bin/FileRenaming" ]; then
-            echo "OUTPUT_PATH=build/bin/FileRenaming" >> $GITHUB_OUTPUT
-            echo "Found executable"
-          else
-            echo "OUTPUT_PATH=" >> $GITHUB_OUTPUT
-            echo "No output found"
-          fi
-
       - name: Upload macOS artifacts
-        if: matrix.os == 'macos-latest' && steps.find-macos-output.outputs.OUTPUT_PATH != ''
+        if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
           name: FileRenaming-macos
-          path: ${{ steps.find-macos-output.outputs.OUTPUT_PATH }}
+          path: build/bin/FileRenaming
           retention-days: 30
 
   release:
